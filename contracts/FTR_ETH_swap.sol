@@ -7,21 +7,10 @@ import "./futuristic_token.sol";
 // /**
 //  * Network: Rinkeby
 //  * Aggregator: ETH/USD
-//  * Address: 0x8A753747A1Fa494EC906cE90E9f37563A8AF630e
+//  * Address: 0x9326BFA02ADD2366b30bacB125260Af641031331
 //  */
 
-interface IExchangeFeed {
-  function latestRoundData()
-    external
-    view
-    returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    );
-}
+import "./AggregatorV3Interface.sol";
 
 interface IHome2{
      function getStudentsList() external view returns (string[] memory); 
@@ -32,60 +21,65 @@ interface IFTR{
      function transfer(address _to, uint256 _value) external returns (bool);
 }
 
-
 contract FTR_ETH_Swap {
     using SafeMath for *;
-
     string private _name = "FTR/ETH Swapper";
 
+    AggregatorV3Interface internal priceFeed;
 
-    address private rateSource = 0x8A753747A1Fa494EC906cE90E9f37563A8AF630e; // 0x8facae210c796bcac7afe147b622ffc1064629f6 
+    address private rateSource = 0x9326BFA02ADD2366b30bacB125260Af641031331; // 0x8facae210c796bcac7afe147b622ffc1064629f6 
     address private home2 = 0x0E822C71e628b20a35F8bCAbe8c11F274246e64D; // From previous task
+
+    uint256 private NumberOfStudents;
+
+    event Selling(address indexed receiver, uint value);
+    event Fail(address indexed receiver, uint value, bool sent, bytes data);
+    event Intercept(bytes message);
+
+    address private owner = msg.sender;
+    FuturisticToken internal token;
+
+    constructor() {
+        priceFeed = AggregatorV3Interface(rateSource);
+        NumberOfStudents = uint256(IHome2(home2).getStudentsList().length);
+        token = FuturisticToken(owner);
+    }
+
+    fallback() external payable {
+        emit Intercept(msg.data);
+    }
 
     function getExchange() public payable returns (uint) {      
         return uint (
-            SafeMath.div ( uint256(_getLatestPrice()), getNumberOfStudents())
+            SafeMath.div (uint256(_getLatestPrice()), NumberOfStudents)
         );
     }
 
     function _getLatestPrice() internal view returns (uint) {
-            (
-                uint80 roundID, 
-                int256 answer,
-                uint256 startedAt,
-                uint256 updatedAt,
-                uint80 answeredInRound
-            ) = IExchangeFeed(rateSource).latestRoundData();
+            ( , int256 answer, , , ) = priceFeed.latestRoundData();
         return uint(SafeMath.div(uint256(answer), 1e8));
     }
 
-    function getNumberOfStudents() public view returns (uint256) {  // From Home2 contract
-        return uint256(
-            IHome2(home2)
-            .getStudentsList()
-            .length
-        );
-    }
-
-    function buyTokens() public payable {
+    function buyTokens() public payable returns (bool) {
         uint amount;
-        FuturisticToken token;
-
+        
         uint exchangeRate = getExchange();
 
-        amount = uint(SafeMath.mul(msg.value, exchangeRate));
-        uint endBalance = FuturisticToken(token).balanceOf(address(FuturisticToken(token)));
+        //amount = uint(SafeMath.mul(msg.value, exchangeRate));
+        amount = uint(msg.value * exchangeRate);
+
+        uint currentBalance = token.balanceOf(address(this));
     
-        if( endBalance > amount ){  
-                FuturisticToken(token).transfer(msg.sender, amount);
+        if( currentBalance > amount ) {
+            token.transfer(msg.sender, amount);
+            emit Selling(msg.sender, amount);
+            return true;
         }
         else {
-            msg.sender
-            .call {
-                gas   : 210000,
-                value : msg.value}
-            ("Sorry,there is not enough tokens");
-        }
+            (bool sent, bytes memory data) = msg.sender.call {value : msg.value} ("Sorry,there is not enough tokens");
+            emit Fail(msg.sender, amount, sent, data);
+            return false;
+       }
     }
 }
 
