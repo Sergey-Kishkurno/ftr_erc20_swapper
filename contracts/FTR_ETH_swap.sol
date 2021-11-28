@@ -48,7 +48,7 @@ contract FTR_ETH_Swap {
         );
     }
 
-    function _getLatestPrice() public view returns (uint) {
+    function _getLatestPrice() internal view returns (uint) {
             (
                 uint80 roundID, 
                 int256 answer,
