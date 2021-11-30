@@ -5,7 +5,7 @@ import "./safe_math.sol";
 import "./ierc20.sol";
 
 contract FuturisticToken is IERC20 {
-    using SafeMath for uint256;
+    using SafeMath for *;
     
     mapping (address => uint256) private _balances;
 
@@ -14,9 +14,15 @@ contract FuturisticToken is IERC20 {
     uint8 private _decimals = 18;
 
     uint256 private _totalSupply = 5_000 * (uint256(10) ** _decimals);
-   
+
+    address private owner = msg.sender;
+    
     constructor () {
         _mint (msg.sender, _totalSupply); 
+    }
+
+    function getOwner() public view returns (address) {
+        return owner;
     }
 
     function balanceOf(address account) public view returns (uint256) {
