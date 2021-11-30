@@ -14,10 +14,10 @@ require("@nomiclabs/hardhat-web3");
 
 const {
   INFURA_KEY,
-  MNEMONIC,
   ETHERSCAN_API_KEY,
   PRIVATE_KEY,
-  PRIVATE_KEY_TESTNET
+  PRIVATE_KEY_TESTNET,
+  MNEMONIC
 } = process.env;
 
 const accountsTestnet = PRIVATE_KEY_TESTNET
