@@ -1,24 +1,14 @@
-pragma solidity ^0.8.10;
 // SPDX-License-Identifier: MIT
+pragma solidity ^0.8.10;
 
 import {SafeMath} from "./safe_math.sol";
 import "./futuristic_token.sol";
-
-
-// --- Interfaces section --------------------------------------------------------
 import "./AggregatorV3Interface.sol";
+import "./ierc20.sol";
 
 interface IHome2{
      function getStudentsList() external view returns (string[] memory); 
 }
-
-interface IFTR{
-     function balanceOf(address ftr) external view returns (uint);
-     function transfer(address _to, uint256 _value) external returns (bool);
-}
-
-// --- Interfaces section end -----------------------------------------------------
-
 
 
 contract FTR_ETH_Swap {
@@ -37,25 +27,42 @@ contract FTR_ETH_Swap {
     uint256 private NumberOfStudents;
 
     event Selling(address indexed receiver, uint value);
-    event Fail(address indexed receiver, uint value, bytes data);
-    event Intercept(bytes message);
+    event Failure(address indexed receiver, uint value, bytes data);
+    event Interception(bytes message);
+    event Recepting(bytes message);
 
-    address private owner = msg.sender;
+    address private _owner;
     FuturisticToken internal token;
 
     constructor(address tokenAddress) {
         priceFeed = AggregatorV3Interface(rateSource);
         NumberOfStudents = uint256(IHome2(home2).getStudentsList().length);
         token = FuturisticToken(tokenAddress);
+        _owner = msg.sender;
     }
     
     fallback() external payable {
-        emit Intercept(msg.data);
+        //buyTokens();
+        _getBackEther();
+        emit Interception(msg.data);
     }
 
-    function getExchange() public payable returns (uint) {   
-        ( , int256 price, , , ) = priceFeed.latestRoundData();   
-        return uint (SafeMath.div (uint256(price / 1e18), NumberOfStudents));
+    function _getBackEther() public payable {
+        require(msg.sender == _owner, "No authority to take back tokens");
+        payable(msg.sender).transfer(address(this).balance);
+    }
+
+    receive() external payable {
+        buyTokens();
+        emit Recepting("Assets came back");
+    }
+
+    function getExchange() public view returns (uint) {   
+        uint res_;
+        uint8 priceFeedDecimals = priceFeed.decimals(); // = 8
+        ( , int256 price, , , ) = priceFeed.latestRoundData();
+        res_ = uint ( uint(price) / uint (10**priceFeedDecimals));
+        return uint (res_ / NumberOfStudents);
     }
 
     function buyTokens() public payable returns (bool) {
@@ -75,28 +82,9 @@ contract FTR_ETH_Swap {
         else {
             (bool is_sent, bytes memory data) = msg.sender.call {value : msg.value} ("Sorry,there is not enough tokens");
             require(is_sent, "Failled to return Eth back to buyer");
-            emit Fail(msg.sender, amount, data);
+            emit Failure(msg.sender, amount, data);
             return false;
        }
     }
 }
 
-contract Interceptor {
-
-    address public owner = msg.sender;
-    event INTERCEPT(bytes message);
-
-    fallback() external payable {
-        emit INTERCEPT(msg.data);
-    }
-
-    function getBackEther() public {
-        require(msg.sender == owner);
-        payable(msg.sender).transfer(address(this).balance);
-    }
-
-    function buy(address _exchangeInstance) public payable {
-        (bool success, ) = _exchangeInstance.call{gas: 300000, value: msg.value}(abi.encodeWithSignature("buyOnePieceOfToken()"));
-        require(success, "External call failed");
-    }
-}
